@@ -1,6 +1,14 @@
 A Bash script for downloading, converting, and analyzing SRA files.
 This script streamlines the process of handling sequencing data by automating the conversion of SRA files to FASTQ format and performing quality control analysis.
 
+VERSIONS OF THE SCRIPT
+This repository contains two versions of the script, one in English and another in Portuguese. Choose the one that best suits your needs.
+
+   English Version: sra2fastq.sh
+   Portuguese Version: sra2fastq_pt.sh
+
+Both scripts have the same functionality, but the language of the comments and user prompts is different.
+
 FEATURES
 Downloads SRA files using a list of accession numbers.
 Converts SRA files to compressed FASTQ files (paired-end supported).
