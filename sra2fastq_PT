@@ -1,0 +1,153 @@
+#!/bin/bash
+
+#BASH STRICT MODE
+set -euo pipefail
+IFS=$'\n\t'
+
+#IMPORTANTE: É necessario ter o SRA tools e o FASTQC instalados
+
+#Nota: Cada fase esta inserida dentro de uma função para depois facilitar a escolha do usuario
+#-------------------------------------------------------------------------------------------------------------
+
+#FASE 1
+
+#Nesta fase vai ser realizado o download dos ficheiros SRA a partir de um documento texto que contêm um
+#identificador por linha
+
+fase1_download_sra() {
+
+#Fazer download dos ficheiros SRA a partir de accessesion numbers
+#SRR_Acc_List.txt --- é o ficheiro que contem os accession numbers dos ficheiros SRA
+#while read -r accession: lê o ficheiro "SRR_Acc_List.txt" linha a linha e armazena cada entrada em accession
+#prefetch faz o donwlownd dos ficheiros SRA; -C yes: verifica o ficheiro depois do download e -p mostra o progresso
+
+echo "FASE 1: Download dos ficheiros SRA"
+
+#A variavel INPUT_FILE vai corresponder ao nome do ficheiro texto com os accession numbers dos ficheiros SRA
+INPUT_FILE="SRR_Acc_List.txt"
+echo ${INPUT_FILE}
+#Verificar a existencia do arquivo com os accession numbers 
+if [ ! -f ${INPUT_FILE} ]; then  
+   echo "ERRO: Arquivo ${INPUT_FILE} não encontrado"
+   exit 1 
+fi
+
+while read -r accession;do
+   echo "Download de ${accession}..."
+   prefetch -C yes -p ${accession} || { echo "Erro ao baixar ${accession}"; exit 1; } #faz o download das sequência
+   echo "Mover ficheiros para um unico diretorio"
+   mv ./"$accession"/"$accession".sra .
+done < ${INPUT_FILE}
+echo "Fim da FASE 1"
+
+}
+#-------------------------------------------------------------------------------------------------------------
+
+#FASE 2
+
+#Nesta fase vai ocorrer a conversão dos arquivos SRA para o formato FASTQ
+#Nota: as sequências SRA usadas neste exemplo têm paired-ends dai a opção --split-files em fastq-dump
+
+fase2_converter_fastq() {
+
+#Conversão dos ficheiros SRA para formato FASTQ
+#os accession number usados corespondem a sequencias de DNA com paired ends;
+#--split-files é para dividir o arquivo SRA em dois FASTQ que correspondem a Forward e a reverse strand 
+
+#Verficar a existencia dos ficheiros *.sra
+if ! ls *.sra 1> /dev/null 2>&1; then 
+   echo "ERRO: Nenhum ficheiro SRA encontrado"
+   exit 1 
+fi
+
+echo "FASE 2: Converter arquivos do formato SRA para o formato FASTQ"
+for i in *.sra; do
+   echo "Conversão do arquivo ${i}"
+   fastq-dump --gzip --split-files ${i} || { echo "Erro ao converter ${i} para o formato FASTQ"; exit 1; }
+done
+echo "Fim da FASE 2"
+
+}
+#-------------------------------------------------------------------------------------------------------------
+
+#FASE 3
+
+#Nesta fase vai ocorrer a análise da qualidade das sequêcias --- os relatorios originados vão para a directory
+#reports
+
+fase3_analisar_fastqc() {
+
+#Verificar a existencia de arquivos FASTQ
+if ! ls *.fastq.gz 1> /dev/null 2>&1; then 
+   echo "ERRO: Nenhum ficheiro SRA encontrado"
+   exit 1 
+fi
+
+
+#análise de qualidade dos ficheiros fastq
+mkdir -p reports #cria uma directory para onde os relatorios de qualidade vão
+
+echo "FASE 3: Analise da qualidade das sequencias"
+for u in *.fastq.gz; do
+   echo "Ananlise da qualidade da sequencia ${u}"
+   fastqc -o reports ${u} || { echo "Erro ao analisar a qualidade do ficheiro ${u}"; exit 1; }
+done
+echo "Fim da FASE 3"
+
+echo "FIM DO SCRIPT"
+echo "SCRIPT CONCLUIDO COM SUCESSO"
+
+}
+
+#-------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------
+
+#Menu para o usuario fazer a escolha da(s) fase(s) a realizar
+
+#A pessoa a executar o script poderá escolher qual/quais a(s) fase(s) a executar, podendo assim adaptar o
+#script a situação atual.
+#Adicionalmente, a individualização de cada fase permite a adição de mais fases mais facilmente
+
+echo "Selecione a fase a executar"
+echo "1 - FASE 1: Download dos arquivos SRA"
+echo "2 - FASE 2: Conversão dos arquivos SRA para o formato FASTQ"
+echo "3 - FASE 3: Analise da qualidade das sequencias FASTQ"
+echo "4 - Realizar todas as fases"
+echo "5 - Realisar as fases 2&3"
+
+read -p "Escolha uma opção (1-5): " opcao 
+
+case ${opcao} in 
+    1)
+        fase1_download_sra
+        ;;
+    2)
+        fase2_converter_fastq
+        ;;
+    3)
+        fase3_analisar_fastqc
+        ;;
+    4)
+        fase1_download_sra
+        fase2_converter_fastq
+        fase3_analisar_fastqc
+        ;;
+    5)
+        fase2_converter_fastq
+        fase3_analisar_fastqc
+        ;;
+    *)
+        echo "Opção invalida ... terminando script"
+        exit 1
+        ;;
+
+esac 
+
+#-------------------------------------------------------------------------------------------------------------
+#FINALISAÇÃO
+#REMOVER DIRECTORYS VASIAS
+
+find . -type d -empty -delete 
+
+
+echo "Script concluído com sucesso!"
