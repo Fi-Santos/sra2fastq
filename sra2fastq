@@ -1,0 +1,151 @@
+#!/bin/bash
+
+#BASH STRICT MODE
+set -euo pipefail
+IFS=$'\n\t'
+
+#IMPORTANT: You must have the SRA tools and the FASTQC installed
+
+#Note: Each phase is inserted into a function to make it easier to the user to choose 
+
+#-------------------------------------------------------------------------------------------------------------
+
+#PHASE 1
+
+#At this phase the SRA files will be downloaded from a text document containing an identifier per line
+
+phase1_download_sra() {
+
+#Downloading SRA files from accession numbers
+
+#SRR_Acc_List.txt --- is the file containing the accession numbers of the SRA files
+#while read -r accession: reads the file “SRR_Acc_List.txt” line by line and stores each entry in accession
+#prefetch donwlownd the SRA files; -C yes: checks the file after downloading and -p shows the progress
+
+echo "PHASE 1: Download of the SRA files"
+
+#The INPUT_FILE variavel will correspond to the name of the text file with the accession numbers of the SRA files
+INPUT_FILE="SRR_Acc_List.txt"
+echo ${INPUT_FILE}
+#Check the existence of the file with the accession numbers  
+if [ ! -f ${INPUT_FILE} ]; then  
+   echo "ERROR: FILE ${INPUT_FILE} NOT FOUND"
+   exit 1 
+fi
+
+while read -r accession;do
+   echo "Download of ${accession}..."
+   prefetch -C yes -p ${accession} || { echo "Erro ao baixar ${accession}"; exit 1; } #sequence download
+   echo "Move the files into a sole directory"
+   mv ./"$accession"/"$accession".sra .
+done < ${INPUT_FILE}
+
+
+echo "END OF PHASE 1"
+
+}
+#-------------------------------------------------------------------------------------------------------------
+
+#PHASE 2
+
+#In this phase will ocurr the convertion of the SRA files to FASTQ format
+#Note: The SRA sequences used in this exemple have paired-ends therefor the option --split-files in fastq-dump
+
+phase2_convert_fastq() {
+
+#Convertion of the SRA files to FASTQ format 
+
+#Verficar a existencia dos ficheiros *.sra
+#Verify the existence of the *.sra files
+if ! ls *.sra 1> /dev/null 2>&1; then 
+   echo "ERROR: No SRA files found"
+   exit 1 
+fi
+
+echo "PHASE 2: Convert the arquives from the SRA format to the FASTQ format"
+for i in *.sra; do
+   echo "Convertion of the ${i} arquive"
+   fastq-dump --gzip --split-files ${i} || { echo "Error converting ${i} to FASTQ"; exit 1; }
+done
+echo "END OF PHASE 2"
+
+}
+#-------------------------------------------------------------------------------------------------------------
+
+#PHASE 3
+
+#In this phase will ocurr the analyses of the quality of sequences -- the reports created will go to the directory reports
+
+phase3_analyse_fastqc() {
+
+#Verify the existence of FASTQ arquives
+if ! ls *.fastq.gz 1> /dev/null 2>&1; then 
+   echo "ERROR: No FASTQ files found"
+   exit 1 
+fi
+
+
+#fastq files quality analyses
+mkdir -p reports #creats a directory where the quality reports go
+
+echo "PHASE 3: Sequence quality analyses"
+for u in *.fastq.gz; do
+   echo "Quality analises of the ${u} sequence"
+   fastqc -o reports ${u} || { echo "Error  analising the quality of the ${u} file"; exit 1; }
+done
+echo "END OF PHASE 3"
+
+}
+
+#-------------------------------------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------------------------------------
+
+#Menu for the user to choose the phase(s) to perform
+
+#The person running the script will be able to choose which phase(s) to run, thus being able to adapt the
+#script to the current situation.
+#Additionally, the individualization of each phase allows more phases to be added more easily
+
+
+echo "Select the phase to execute"
+echo "1 - PHASE 1: Download SRA files"
+echo "2 - PHASE 2: Conversion of SRA files to FASTQ format"
+echo "3 - PHASE 3: Analyze the quality of the FASTQ sequences"
+echo "4 - Perform all phases"
+echo "5 - Perform phases 2&3"
+
+read -p "Chose an option (1-5): " opcao 
+
+case ${opcao} in 
+    1)
+        phase1_download_sra
+        ;;
+    2)
+        phase2_convert_fastq
+        ;;
+    3)
+        phase3_analyse_fastqc
+        ;;
+    4)
+        phase1_download_sra
+        phase2_convert_fastq
+        phase3_analyse_fastqc
+        ;;
+    5)
+        phase2_convert_fastq
+        phase3_analyse_fastqc
+        ;;
+    *)
+        echo "Invalid option ... ending script"
+        exit 1
+        ;;
+
+esac 
+
+#-------------------------------------------------------------------------------------------------------------
+#Removing empty directorys
+
+find . -type d -empty -delete 
+
+
+echo "Script concluded with successfully!"
